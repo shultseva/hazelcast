@@ -63,14 +63,7 @@ import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.util.SqlBasicVisitor;
 import org.apache.calcite.sql.util.SqlShuttle;
-import org.apache.calcite.sql.validate.SelectScope;
-import org.apache.calcite.sql.validate.SqlQualified;
-import org.apache.calcite.sql.validate.SqlValidatorCatalogReader;
-import org.apache.calcite.sql.validate.SqlValidatorException;
-import org.apache.calcite.sql.validate.SqlValidatorImplBridge;
-import org.apache.calcite.sql.validate.SqlValidatorScope;
-import org.apache.calcite.sql.validate.SqlValidatorTable;
-import org.apache.calcite.sql.validate.SqlValidatorUtil;
+import org.apache.calcite.sql.validate.*;
 import org.apache.calcite.util.Static;
 import org.apache.calcite.util.Util;
 
@@ -135,7 +128,8 @@ public class HazelcastSqlValidator extends SqlValidatorImplBridge {
             SqlValidatorCatalogReader catalogReader,
             List<Object> arguments,
             IMapResolver iMapResolver,
-            boolean cyclicUserTypesAreAllowed) {
+            boolean cyclicUserTypesAreAllowed
+    ) {
         super(HazelcastSqlOperatorTable.instance(), catalogReader, HazelcastTypeFactory.INSTANCE, CONFIG);
 
         this.rewriteVisitor = new RewriteVisitor(this);
@@ -262,9 +256,16 @@ public class HazelcastSqlValidator extends SqlValidatorImplBridge {
             offset.validate(this, getEmptyScope());
         }
 
-        if (!cyclicUserTypesAreAllowed && doesRowTypeContainCyclicTypes(unwrapFrom(select.getFrom()))) {
-            throw QueryException.error("Experimental feature of using cyclic custom types isn't enabled. "
-                    + "To enable, set " + ClusterProperty.SQL_CUSTOM_CYCLIC_TYPES_ENABLED + " to true");
+        if (!cyclicUserTypesAreAllowed) {
+            super.namespaces.values().stream()
+                    .filter(namespace -> namespace.isWrapperFor(IdentifierNamespace.class))
+                    .map(namespace -> namespace.unwrap(IdentifierNamespace.class).getId())
+                    .forEach(id -> {
+                        if (doesRowTypeContainCyclicTypes(id)) {
+                            throw QueryException.error("Experimental feature of using cyclic custom types isn't enabled. "
+                                    + "To enable, set " + ClusterProperty.SQL_CUSTOM_CYCLIC_TYPES_ENABLED + " to true");
+                        }
+                    });
         }
     }
 

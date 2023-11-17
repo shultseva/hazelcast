@@ -46,12 +46,15 @@ public class CyclicUDTAreNotAllowedByDefaultTest extends SqlTestSupport {
         a.b = b;
         b.c = c;
         c.a = a;
+        createType("SimpleType", "name VARCHAR");
 
-        createJavaMapping(client(), "test", A.class, "this AType");
-        IMap<Long, A> map = client().getMap("test");
+        createJavaMapping(client(), "cycled_table", A.class, "this AType");
+        createJavaMapping(client(), "plain_table", SimpleType.class, "this SimpleType");
+
+        IMap<Long, A> map = client().getMap("cycled_table");
         map.put(1L, a);
 
-        assertThatThrownBy(() -> instance().getSql().execute("SELECT * FROM test"))
+        assertThatThrownBy(() -> instance().getSql().execute("SELECT * FROM cycled_table"))
                 .hasMessageContaining("Experimental feature of using cyclic custom types isn't enabled.");
     }
 
@@ -60,5 +63,53 @@ public class CyclicUDTAreNotAllowedByDefaultTest extends SqlTestSupport {
         new SqlType(name)
                 .fields(fields)
                 .create(client());
+    }
+
+    @Test
+    public void test_defaultJoinBehaviorFailsOnCycles() {
+        createType("AType", "name VARCHAR", "b BType");
+        createType("BType", "name VARCHAR", "c CType");
+        createType("CType", "name VARCHAR", "a AType");
+
+
+        createType("SimpleType", "name VARCHAR");
+
+        final A a = new A("a");
+        final B b = new B("b");
+        final C c = new C("c");
+
+        a.b = b;
+        b.c = c;
+        c.a = a;
+
+        createJavaMapping(client(), "cycled_table", A.class, "this AType");
+        createJavaMapping(client(), "plain_table1", SimpleType.class, "this SimpleType");
+        createJavaMapping(client(), "plain_table2", SimpleType.class, "this SimpleType");
+        createJavaMapping(client(), "plain_table3", SimpleType.class, "this SimpleType");
+
+
+        IMap<Long, A> map = client().getMap("cycled_table");
+        map.put(1L, a);
+
+        assertThatThrownBy(() ->
+                instance().getSql().execute("SELECT * FROM plain_table1 as t1 " +
+                        "JOIN plain_table2 as t2 on t2.this.name = t1.this.name " +
+                        "JOIN cycled_table as t3 on t3.this.name = t2.this.name " +
+                        "JOIN (SELECT t4.this.name as new_name from plain_table3 as t4) as j on j.new_name = t2.this.name " +
+                        "WHERE t2.this.name != 'foo' AND t1.this.name = 'bar' " +
+                        "ORDER BY t1.this.name LIMIT 100"))
+                .hasMessageContaining("Experimental feature of using cyclic custom types isn't enabled.");
+    }
+
+    static class SimpleType {
+        String name;
+
+        SimpleType(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return name;
+        }
     }
 }
