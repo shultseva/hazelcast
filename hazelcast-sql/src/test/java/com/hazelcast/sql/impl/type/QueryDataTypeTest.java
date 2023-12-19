@@ -55,6 +55,7 @@ import com.hazelcast.test.annotation.ParallelJVMTest;
 import com.hazelcast.test.annotation.QuickTest;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
@@ -243,6 +244,47 @@ public class QueryDataTypeTest extends HazelcastTestSupport {
     }
 
     @Test
+    public void testFinalizeFirst() {
+        QueryDataType placeholder = new QueryDataType("Person");
+        assertThatThrownBy(placeholder::finalizeFields).isInstanceOf(IllegalStateException.class).hasMessage("Type has no fields");
+    }
+
+    @Test
+    public void testGetFirst() {
+        QueryDataType placeholder = new QueryDataType("Person");
+        assertThat(placeholder.getObjectFields()).isEmpty();
+    }
+
+    @Test
+    public void testAddFinalizeGet() {
+        QueryDataType placeholder = new QueryDataType("Person");
+        placeholder.addField("name", QueryDataType.VARCHAR);
+        placeholder.finalizeFields();
+        assertThat(placeholder.getObjectFields())
+                .singleElement()
+                .isEqualTo(new QueryDataType.QueryDataTypeField("name", QueryDataType.VARCHAR));
+    }
+
+    @Test
+    public void testAddGetFinalize() {
+        QueryDataType placeholder = new QueryDataType("Person");
+        placeholder.addField("name", QueryDataType.VARCHAR);
+        assertThatThrownBy(placeholder::getObjectFields).isInstanceOf(IllegalStateException.class).hasMessage("Type fields are not finalized");
+    }
+
+    @Test
+    public void testFinalizeAdd() {
+        QueryDataType placeholder = new QueryDataType("Person");
+        placeholder.addField("name", QueryDataType.VARCHAR);
+        placeholder.finalizeFields();
+        assertThatThrownBy(() -> placeholder.addField("name2", QueryDataType.VARCHAR))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Type fields are already finalized");
+    }
+
+
+    @Test
+    @Ignore
     public void testFinalization() {
         QueryDataType placeholder = new QueryDataType("Person");
         // The type is assumed to be concrete at creation.

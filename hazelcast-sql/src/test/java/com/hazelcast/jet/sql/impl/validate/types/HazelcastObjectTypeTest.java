@@ -22,6 +22,7 @@ import com.hazelcast.test.annotation.ParallelJVMTest;
 import com.hazelcast.test.annotation.QuickTest;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.type.SqlTypeName;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
@@ -53,6 +54,47 @@ public class HazelcastObjectTypeTest {
     }
 
     @Test
+    public void testFinalizeFirst() {
+        HazelcastObjectType person = new HazelcastObjectType("Person");
+        HazelcastObjectType.finalizeFields(List.of(person));
+        assertThat(person.getFieldList()).isEmpty();
+    }
+
+    @Test
+    public void testGetFirst() {
+        HazelcastObjectType person = new HazelcastObjectType("Person");
+        assertThatThrownBy(person::getFieldList).isInstanceOf(IllegalStateException.class).hasMessage("Type fields are not finalized");
+    }
+
+    @Test
+    public void testAddFinalizeGet() {
+        HazelcastObjectType person = new HazelcastObjectType("Person");
+        person.addField(new Field("name", 0, nullable(VARCHAR)));
+        HazelcastObjectType.finalizeFields(List.of(person));
+        assertThat(person.getFieldList()).singleElement().isEqualTo(new Field("name", 0, nullable(VARCHAR)));
+    }
+
+    @Test
+    public void testAddGetFinalize() {
+        HazelcastObjectType person = new HazelcastObjectType("Person");
+        person.addField(new Field("name", 0, nullable(VARCHAR)));
+        assertThatThrownBy(person::getFieldList).isInstanceOf(IllegalStateException.class).hasMessage("Type fields are not finalized");
+        assertThatThrownBy(person::getFieldCount).isInstanceOf(IllegalStateException.class).hasMessage("Type fields are not finalized");
+        assertThatThrownBy(person::getFieldNames).isInstanceOf(IllegalStateException.class).hasMessage("Type fields are not finalized");
+    }
+
+    @Test
+    public void testFinalizeAdd() {
+        HazelcastObjectType person = new HazelcastObjectType("Person");
+        person.addField(new Field("name", 0, nullable(VARCHAR)));
+        HazelcastObjectType.finalizeFields(List.of(person));
+        assertThatThrownBy(() -> person.addField(new Field("age", 1, nullable(INTEGER))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Type fields are already finalized");
+    }
+
+    @Test
+    @Ignore
     public void testFinalization() {
         HazelcastObjectType person = new HazelcastObjectType("Person");
         person.addField(new Field("name", 0, nullable(VARCHAR)));
